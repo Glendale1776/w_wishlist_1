@@ -29,3 +29,8 @@
 - Slice: S-06
 - Lock: docs/locks/context-S-06-20260218-1721-5fb3994.lock.md
 - Notes: Added secrets lifecycle runbooks, one-time reveal workflow, and redaction-safe structured observability helpers.
+
+## S-07 — 2026-02-18
+- Slice: S-07
+- Lock: docs/locks/context-S-07-20260218-2215-c078fc3.lock.md
+- Notes: Added admin moderation queue UI, admin-only report and claim override APIs, and audit-persistence smoke coverage.
