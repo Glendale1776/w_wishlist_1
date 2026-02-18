@@ -1,4 +1,4 @@
-status: pending
+status: done
 id: S-02
 topic: brief.md
 title: Owner onboarding and wishlist editor
