@@ -15,6 +15,9 @@ type OwnerItem = {
   status: ItemStatus;
   hasHistory: boolean;
   archived: boolean;
+  imageUrl?: string | null;
+  storagePath?: string | null;
+  sourceUrl?: string | null;
 };
 
 type Wishlist = {
@@ -45,7 +48,10 @@ const starterItems: OwnerItem[] = [
     fundedCents: 8300,
     status: "Reserved",
     hasHistory: true,
-    archived: false
+    archived: false,
+    imageUrl: null,
+    storagePath: null,
+    sourceUrl: "https://store.example/headphones"
   },
   {
     id: "i-2",
@@ -56,7 +62,10 @@ const starterItems: OwnerItem[] = [
     fundedCents: 0,
     status: "Available",
     hasHistory: false,
-    archived: false
+    archived: false,
+    imageUrl: null,
+    storagePath: null,
+    sourceUrl: "https://store.example/coffee-set"
   }
 ];
 
@@ -88,6 +97,8 @@ const sampleCatalog: Omit<OwnerItem, "id" | "hasHistory" | "archived">[] = [
 ];
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const MAX_UPLOAD_MB = 10;
+const DEMO_USER_ID = "owner-demo";
 
 function money(cents: number) {
   return currency.format(cents / 100);
@@ -99,6 +110,27 @@ function progressPercent(funded: number, target: number) {
   }
   return Math.min(100, Math.round((funded / target) * 100));
 }
+
+type UploadApiResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    path: string;
+    signedUrl: string;
+    maxMb: number;
+  };
+};
+
+type MetadataApiResponse = {
+  ok: boolean;
+  message?: string;
+  data?: {
+    title: string;
+    imageUrl: string | null;
+    priceCents: number | null;
+    sourceUrl: string;
+  };
+};
 
 function routeFromSegments(segments: string[] | undefined) {
   if (!segments || segments.length === 0) {
@@ -366,6 +398,99 @@ function OwnerWishlistEditor({ wishlistId }: { wishlistId: string }) {
   const [groupFunded, setGroupFunded] = useState(false);
   const [target, setTarget] = useState("100");
   const [formError, setFormError] = useState("");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [uploadedStoragePath, setUploadedStoragePath] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done">("idle");
+  const [uploadError, setUploadError] = useState("");
+  const [metaStatus, setMetaStatus] = useState<"idle" | "fetching" | "fetched" | "failed">("idle");
+  const [metaError, setMetaError] = useState("");
+
+  const onUploadImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadError("");
+    setUploadStatus("idle");
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Only image files are allowed.");
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      setUploadError(`File exceeds ${MAX_UPLOAD_MB}MB limit.`);
+      return;
+    }
+
+    const tempPreview = URL.createObjectURL(file);
+    setImagePreviewUrl(tempPreview);
+
+    try {
+      setUploadStatus("uploading");
+      const formData = new FormData();
+      formData.set("kind", "item");
+      formData.set("file", file);
+
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        headers: {
+          "x-user-id": DEMO_USER_ID
+        },
+        body: formData
+      });
+
+      const payload = (await response.json()) as UploadApiResponse;
+      if (!response.ok || !payload.ok || !payload.data) {
+        throw new Error(payload.message || "Upload failed.");
+      }
+
+      setUploadedStoragePath(payload.data.path);
+      setImagePreviewUrl(payload.data.signedUrl);
+      setUploadStatus("done");
+    } catch (error) {
+      setUploadStatus("idle");
+      setUploadError(error instanceof Error ? error.message : "Upload failed.");
+    }
+  };
+
+  const onFetchMetadata = async () => {
+    if (!url.trim()) {
+      setMetaStatus("failed");
+      setMetaError("Enter a URL first.");
+      return;
+    }
+
+    setMetaError("");
+    setMetaStatus("fetching");
+
+    try {
+      const response = await fetch("/api/metadata/fetch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const payload = (await response.json()) as MetadataApiResponse;
+      if (!response.ok || !payload.ok || !payload.data) {
+        throw new Error(payload.message || "Could not fetch metadata.");
+      }
+
+      if (payload.data.title) {
+        setTitle(payload.data.title);
+      }
+      if (payload.data.priceCents !== null) {
+        setPrice(String(payload.data.priceCents));
+      }
+      if (payload.data.imageUrl) {
+        setImagePreviewUrl(payload.data.imageUrl);
+        setUploadedStoragePath(null);
+      }
+
+      setMetaStatus("fetched");
+    } catch (error) {
+      setMetaStatus("failed");
+      setMetaError(error instanceof Error ? error.message : "Metadata fetch failed.");
+    }
+  };
 
   const onSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -400,7 +525,10 @@ function OwnerWishlistEditor({ wishlistId }: { wishlistId: string }) {
         fundedCents: 0,
         status: "Available",
         hasHistory: false,
-        archived: false
+        archived: false,
+        imageUrl: imagePreviewUrl,
+        storagePath: uploadedStoragePath,
+        sourceUrl: mode === "url" ? url.trim() || null : null
       },
       ...current
     ]);
@@ -410,6 +538,12 @@ function OwnerWishlistEditor({ wishlistId }: { wishlistId: string }) {
     setPrice("0");
     setGroupFunded(false);
     setTarget("100");
+    setImagePreviewUrl(null);
+    setUploadedStoragePath(null);
+    setUploadStatus("idle");
+    setUploadError("");
+    setMetaStatus("idle");
+    setMetaError("");
   };
 
   const archiveItem = (itemId: string) => {
@@ -434,11 +568,17 @@ function OwnerWishlistEditor({ wishlistId }: { wishlistId: string }) {
             const percent = progressPercent(item.fundedCents, item.targetCents);
             return (
               <article key={item.id} className="rounded-2xl border border-line bg-card p-4">
+                {item.imageUrl && (
+                  <div className="mb-3 overflow-hidden rounded-xl border border-line bg-soft">
+                    <img src={item.imageUrl} alt={item.title} className="h-40 w-full object-cover" />
+                  </div>
+                )}
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold">{item.title}</h2>
                     <p className="mt-1 text-sm text-ink/75">Price {money(item.priceCents)}</p>
                     <p className="mt-1 text-sm text-ink/75">Status {item.archived ? "Archived" : item.status}</p>
+                    {item.sourceUrl && <p className="mt-1 text-xs text-ink/65">Source: {item.sourceUrl}</p>}
                   </div>
                   <div className="text-right text-sm">
                     <p>
@@ -513,16 +653,44 @@ function OwnerWishlistEditor({ wishlistId }: { wishlistId: string }) {
             </label>
 
             {mode === "url" && (
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium">URL</span>
-                <input
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  className="w-full rounded-xl border border-line px-3 py-2"
-                  placeholder="https://store.example/item"
-                />
-              </label>
+              <div className="space-y-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium">URL</span>
+                  <input
+                    value={url}
+                    onChange={(event) => setUrl(event.target.value)}
+                    className="w-full rounded-xl border border-line px-3 py-2"
+                    placeholder="https://store.example/item"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={onFetchMetadata}
+                  className="rounded-lg border border-line bg-soft px-3 py-2 text-sm font-medium"
+                  disabled={metaStatus === "fetching"}
+                >
+                  {metaStatus === "fetching" ? "Fetching details..." : "Fetch details"}
+                </button>
+                {metaStatus === "fetched" && <p className="text-xs text-accent">Details fetched. You can still edit fields manually.</p>}
+                {metaError && <p className="text-xs text-danger">{metaError} Continue with manual entry.</p>}
+              </div>
             )}
+
+            <div className="space-y-2 rounded-xl border border-line bg-soft/40 p-3">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium">Item image</span>
+                <input type="file" accept="image/*" onChange={onUploadImage} className="w-full text-sm" />
+              </label>
+              <p className="text-xs text-ink/70">Accepted: JPG, PNG, WEBP, GIF. Max {MAX_UPLOAD_MB}MB.</p>
+              {uploadStatus === "uploading" && <p className="text-xs text-ink/70">Uploading image...</p>}
+              {uploadStatus === "done" && <p className="text-xs text-accent">Image uploaded with signed preview access.</p>}
+              {uploadError && <p className="text-xs text-danger">{uploadError}</p>}
+              {imagePreviewUrl && (
+                <div className="overflow-hidden rounded-lg border border-line bg-card">
+                  <img src={imagePreviewUrl} alt="Item preview" className="h-36 w-full object-cover" />
+                </div>
+              )}
+            </div>
 
             <label className="block">
               <span className="mb-1 block text-sm font-medium">Price (cents)</span>

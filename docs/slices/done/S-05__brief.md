@@ -1,4 +1,4 @@
-status: pending
+status: done
 id: S-05
 topic: brief.md
 title: Uploads, previews, and metadata limits

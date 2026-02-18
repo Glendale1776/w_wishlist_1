@@ -19,3 +19,8 @@
 - Slice: S-04
 - Lock: docs/locks/context-S-04-20260218-1701-b6116ae.lock.md
 - Notes: Implemented idempotent claim/contribution mutation endpoints with conflict-safe state transitions and structured logs.
+
+## S-05 — 2026-02-18
+- Slice: S-05
+- Lock: docs/locks/context-S-05-20260218-1711-0507935.lock.md
+- Notes: Implemented upload validation + signed preview URLs and hardened metadata fetch flow with manual fallback UX.
