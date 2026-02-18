@@ -1,4 +1,4 @@
-status: pending
+status: done
 id: S-06
 topic: brief.md
 title: Secrets lifecycle and operational observability

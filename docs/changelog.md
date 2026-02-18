@@ -24,3 +24,8 @@
 - Slice: S-05
 - Lock: docs/locks/context-S-05-20260218-1711-0507935.lock.md
 - Notes: Implemented upload validation + signed preview URLs and hardened metadata fetch flow with manual fallback UX.
+
+## S-06 — 2026-02-18
+- Slice: S-06
+- Lock: docs/locks/context-S-06-20260218-1721-5fb3994.lock.md
+- Notes: Added secrets lifecycle runbooks, one-time reveal workflow, and redaction-safe structured observability helpers.

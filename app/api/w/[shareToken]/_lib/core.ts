@@ -1,5 +1,6 @@
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { getCorrelationId, logOpsEvent } from "../../../../lib/ops/observability";
 
 export type MutationAction = "reserve" | "release" | "purchase" | "contribute";
 
@@ -141,16 +142,6 @@ function computeAvailability(item: ShareItemState): Availability {
 
 function safeJson(response: ResponseBody, status = 200) {
   return NextResponse.json(response, { status });
-}
-
-function structuredLog(entry: Record<string, unknown>) {
-  console.info(
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      scope: "api.w.mutation",
-      ...entry
-    })
-  );
 }
 
 async function withItemLock<T>(lockKey: string, task: () => Promise<T>): Promise<T> {
@@ -296,7 +287,7 @@ export async function handleMutation(
   params: { shareToken: string },
   action: MutationAction
 ) {
-  const correlationId = request.headers.get("x-correlation-id") || randomUUID();
+  const correlationId = getCorrelationId(request.headers);
 
   try {
     const userId = assertAuthUser(request);
@@ -316,7 +307,7 @@ export async function handleMutation(
     return await withItemLock(lockKey, async () => {
       const existing = getStore().idempotency.get(idempotencyCacheKey);
       if (existing) {
-        structuredLog({
+        logOpsEvent("api.w.mutation", {
           correlationId,
           action,
           actorUserId: userId,
@@ -343,7 +334,7 @@ export async function handleMutation(
         const record: IdempotencyRecord = { status: 200, body: payload };
         getStore().idempotency.set(idempotencyCacheKey, record);
 
-        structuredLog({
+        logOpsEvent("api.w.mutation", {
           correlationId,
           action,
           actorUserId: userId,
@@ -362,7 +353,7 @@ export async function handleMutation(
         const record: IdempotencyRecord = { status: apiError.status, body: payload };
         getStore().idempotency.set(idempotencyCacheKey, record);
 
-        structuredLog({
+        logOpsEvent("api.w.mutation", {
           correlationId,
           action,
           actorUserId: userId,
@@ -378,7 +369,7 @@ export async function handleMutation(
   } catch (error) {
     const apiError = error instanceof ApiError ? error : new ApiError("INTERNAL", 500, "Unexpected request failure.");
 
-    structuredLog({
+    logOpsEvent("api.w.mutation", {
       correlationId,
       action,
       result: "error",
