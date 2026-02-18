@@ -23,7 +23,6 @@ export default function AuthPage({
             <span className="mb-1 block text-sm font-medium text-ink">Email</span>
             <input
               type="email"
-              name="email"
               required
               className="w-full rounded-xl border border-line bg-white px-3 py-2"
               placeholder="you@example.com"
@@ -34,15 +33,12 @@ export default function AuthPage({
             <span className="mb-1 block text-sm font-medium text-ink">Password</span>
             <input
               type="password"
-              name="password"
               required
               minLength={8}
               className="w-full rounded-xl border border-line bg-white px-3 py-2"
               placeholder="••••••••"
             />
           </label>
-
-          <input type="hidden" name="returnTo" value={returnTo} />
 
           <button
             type="submit"
